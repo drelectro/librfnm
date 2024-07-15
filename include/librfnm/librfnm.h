@@ -46,6 +46,7 @@ enum librfnm_stream_format {
     LIBRFNM_STREAM_FORMAT_CS8 = 2,
     LIBRFNM_STREAM_FORMAT_CS16 = 4,
     LIBRFNM_STREAM_FORMAT_CF32 = 8,
+    LIBRFNM_STREAM_FORMAT_S16= 16,
 };
 
 enum librfnm_tx_latency_policy {
@@ -241,6 +242,7 @@ public:
 private:
     void threadfn(size_t thread_index);
 
+    MSDLL bool unpack_12_to_s16(uint8_t* dest, uint8_t* src, size_t sample_cnt);
     MSDLL bool unpack_12_to_cs16(uint8_t* dest, uint8_t* src, size_t sample_cnt);
     MSDLL bool unpack_12_to_cf32(uint8_t* dest, uint8_t* src, size_t sample_cnt);
     MSDLL bool unpack_12_to_cs8(uint8_t* dest, uint8_t* src, size_t sample_cnt);

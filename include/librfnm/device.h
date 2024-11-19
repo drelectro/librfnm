@@ -178,6 +178,7 @@ namespace rfnm {
         MSDLL bool unpack_12_to_cs16(uint8_t* dest, uint8_t* src, size_t sample_cnt);
         MSDLL bool unpack_12_to_cf32(uint8_t* dest, uint8_t* src, size_t sample_cnt);
         MSDLL bool unpack_12_to_cs8(uint8_t* dest, uint8_t* src, size_t sample_cnt);
+        MSDLL bool unpack_12_to_s16(uint8_t* dest, uint8_t* src, size_t sample_cnt);
         MSDLL void pack_cs16_to_12(uint8_t* dest, uint8_t* src8, int sample_cnt);
 
         MSDLL int single_ch_id_bitmap_to_adc_id(uint8_t ch_ids);

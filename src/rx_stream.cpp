@@ -161,6 +161,10 @@ MSDLL rfnm_api_failcode rx_stream::read(void * const * buffs, size_t elems_to_re
     size_t read_elems = 0;
     bool need_more_data = false;
 
+    if (bytes_per_ele > 256) {
+		bytes_per_ele -= 256;
+    }
+
     do {
         // only copy as many samples as we have ready on all channels
         size_t samples_avail = SIZE_MAX;
@@ -179,32 +183,34 @@ MSDLL rfnm_api_failcode rx_stream::read(void * const * buffs, size_t elems_to_re
             samples_to_copy = elems_to_read - read_elems;
         }
 
-        // copy equal amounts of data for each channel
-        size_t buf_idx = 0;
-        for (uint32_t channel : channels) {
-            size_t ch_samples_to_copy = samples_to_copy;
-            uint8_t *dst = reinterpret_cast<uint8_t *>(buffs[buf_idx++]) + read_elems * bytes_per_ele;
+        if (samples_to_copy) {
+            // copy equal amounts of data for each channel
+            size_t buf_idx = 0;
+            for (uint32_t channel : channels) {
+                size_t ch_samples_to_copy = samples_to_copy;
+                uint8_t* dst = reinterpret_cast<uint8_t*>(buffs[buf_idx++]) + read_elems * bytes_per_ele;
 
-            // large samples_left value means prepend zero padding for alignment purposes
-            if (samples_left[channel] > RFNM_USB_RX_PACKET_ELEM_CNT) {
-                size_t pad_samples = samples_left[channel] - RFNM_USB_RX_PACKET_ELEM_CNT;
-                if (pad_samples > ch_samples_to_copy) {
-                    pad_samples = ch_samples_to_copy;
+                // large samples_left value means prepend zero padding for alignment purposes
+                if (samples_left[channel] > RFNM_USB_RX_PACKET_ELEM_CNT) {
+                    size_t pad_samples = samples_left[channel] - RFNM_USB_RX_PACKET_ELEM_CNT;
+                    if (pad_samples > ch_samples_to_copy) {
+                        pad_samples = ch_samples_to_copy;
+                    }
+
+                    std::memset(dst, 0, pad_samples * bytes_per_ele);
+                    dst += pad_samples * bytes_per_ele;
+                    samples_left[channel] -= pad_samples;
+                    ch_samples_to_copy -= pad_samples;
                 }
 
-                std::memset(dst, 0, pad_samples * bytes_per_ele);
-                dst += pad_samples * bytes_per_ele;
-                samples_left[channel] -= pad_samples;
-                ch_samples_to_copy -= pad_samples;
+                uint8_t* src = pending_rx_buf[channel]->buf +
+                    (RFNM_USB_RX_PACKET_ELEM_CNT - samples_left[channel]) * bytes_per_ele;
+                std::memcpy(dst, src, ch_samples_to_copy * bytes_per_ele);
+                samples_left[channel] -= ch_samples_to_copy;
             }
 
-            uint8_t *src = pending_rx_buf[channel]->buf +
-                (RFNM_USB_RX_PACKET_ELEM_CNT - samples_left[channel]) * bytes_per_ele;
-            std::memcpy(dst, src, ch_samples_to_copy * bytes_per_ele);
-            samples_left[channel] -= ch_samples_to_copy;
+            read_elems += samples_to_copy;
         }
-
-        read_elems += samples_to_copy;
 
         if (need_more_data) {
             uint32_t wait_us = 0;
@@ -311,7 +317,7 @@ rfnm_api_failcode rx_stream::rx_dqbuf_multi(uint32_t timeout_us, bool first) {
                 shift_samples = samp_delta - RFNM_USB_RX_PACKET_ELEM_CNT;
                 spdlog::info("channel {} repeat {} samples", channel, -shift_samples);
 
-                if (shift_samples < -RFNM_USB_RX_PACKET_ELEM_CNT) {
+                if (shift_samples < 0-RFNM_USB_RX_PACKET_ELEM_CNT) {
                     shift_samples = 0;
                     spdlog::info("phytimer flyback ignored");
                 }

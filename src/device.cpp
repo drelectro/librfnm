@@ -572,6 +572,34 @@ MSDLL bool device::unpack_12_to_cs8(uint8_t* dest, uint8_t* src, size_t sample_c
     return true;
 }
 
+MSDLL bool device::unpack_12_to_s16(uint8_t* dest, uint8_t* src, size_t sample_cnt) {
+    uint64_t buf{};
+    uint32_t r0{};
+    uint32_t* dest_32{};
+    uint64_t* src_64{};
+
+    if (sample_cnt % 2) {
+        spdlog::error("RFNM::Conversion::unpack12toS16() -> sample_cnt {} is not divisible by 2", sample_cnt);
+        return false;
+    }
+
+    // process two samples at a time
+    sample_cnt = sample_cnt / 2;
+    for (size_t c = 0; c < sample_cnt; c++) {
+        src_64 = (uint64_t*)((uint8_t*)src + (c * 6));
+        buf = *(src_64); //unaligned read?
+        r0 = 0;
+        r0 |= (buf & (0xfffll << 0)) << 4;     // I1
+        //r0 |= (buf & (0xfffll << 12)) << 8;  // Q1
+        r0 |= (buf & (0xfffll << 24)) >> 4;    // I2
+        //r0 |= (buf & (0xfffll << 36)) << 16; // Q2
+
+        dest_32 = (uint32_t*)(dest + (c * 4));
+        *dest_32 = r0;
+    }
+    return true;
+}
+
 MSDLL void device::pack_cs16_to_12(uint8_t* dest, uint8_t* src8, int sample_cnt) {
 //#ifndef __builtin_unreachable
     uint64_t buf;
@@ -783,6 +811,9 @@ void device::threadfn(size_t thread_index) {
             }
             else if (s->transport_status.rx_stream_format == STREAM_FORMAT_CF32) {
                 unpack_12_to_cf32(buf->buf, (uint8_t*)lrxbuf->buf, RFNM_USB_RX_PACKET_ELEM_CNT);
+            }
+            else if (s->transport_status.rx_stream_format == STREAM_FORMAT_S16) {
+                unpack_12_to_s16(buf->buf, (uint8_t*)lrxbuf->buf, RFNM_USB_RX_PACKET_ELEM_CNT);
             }
 
             buf->adc_cc = lrxbuf->adc_cc;
@@ -1191,7 +1222,11 @@ exit_eth:
 MSDLL rfnm_api_failcode device::set_stream_format(enum stream_format format, size_t *bufsize) {
     if (stream_format_locked) {
         if (bufsize) {
-            *bufsize = RFNM_USB_RX_PACKET_ELEM_CNT * s->transport_status.rx_stream_format;
+            //*bufsize = RFNM_USB_RX_PACKET_ELEM_CNT * s->transport_status.rx_stream_format;
+            if (format == STREAM_FORMAT_S16)
+                 *bufsize = RFNM_USB_RX_PACKET_ELEM_CNT * 2;
+             else
+                 *bufsize = RFNM_USB_RX_PACKET_ELEM_CNT * s->transport_status.rx_stream_format;
         }
 
         if (format == s->transport_status.rx_stream_format) {
@@ -1205,11 +1240,16 @@ MSDLL rfnm_api_failcode device::set_stream_format(enum stream_format format, siz
     case STREAM_FORMAT_CS8:
     case STREAM_FORMAT_CS16:
     case STREAM_FORMAT_CF32:
+    case STREAM_FORMAT_S16:
         s->transport_status.rx_stream_format = format;
         s->transport_status.tx_stream_format = format;
         if (bufsize) {
-            *bufsize = RFNM_USB_RX_PACKET_ELEM_CNT * format;
-        }
+            //*bufsize = RFNM_USB_RX_PACKET_ELEM_CNT * format;
+            if (format == STREAM_FORMAT_S16) 
+                *bufsize = RFNM_USB_RX_PACKET_ELEM_CNT * 2;
+            else 
+                *bufsize = RFNM_USB_RX_PACKET_ELEM_CNT * format;
+            }
         break;
     default:
         if (bufsize) {

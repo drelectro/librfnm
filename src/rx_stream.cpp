@@ -106,7 +106,7 @@ MSDLL rfnm_api_failcode rx_stream::start() {
     rx_qbuf_multi();
 
     // First sample can sometimes take a while to come, so fetch it here before normal streaming
-    ret = rx_dqbuf_multi(50000, true);
+    ret = rx_dqbuf_multi(500000, true);
     if (ret) goto error;
 
 error:
@@ -161,6 +161,10 @@ MSDLL rfnm_api_failcode rx_stream::read(void * const * buffs, size_t elems_to_re
     size_t read_elems = 0;
     bool need_more_data = false;
 
+    if (bytes_per_ele > 256) {
+        bytes_per_ele -= 256;
+    }
+    
     do {
         // only copy as many samples as we have ready on all channels
         size_t samples_avail = SIZE_MAX;

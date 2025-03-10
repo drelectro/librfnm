@@ -100,6 +100,7 @@ namespace rfnm {
         STREAM_FORMAT_CS8 = 2,
         STREAM_FORMAT_CS16 = 4,
         STREAM_FORMAT_CF32 = 8,
+        STREAM_FORMAT_S16 = 256 + 2,
     };
 
     enum tx_latency_policy {

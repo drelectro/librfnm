@@ -1269,6 +1269,11 @@ MSDLL std::vector<struct rfnm_dev_hwinfo> device::find(enum transport transport,
         libusb_exit(NULL);
     }
 
+    //if (found.size() > 0) {
+    //    return found;
+    //}
+    
+
     if (transport == TRANSPORT_LOCAL || transport == TRANSPORT_FIND) {
 #ifdef BUILD_RFNM_LOCAL_TRANSPORT
         int fd = open("/dev/rfnm_ctrl_ep", O_RDWR);
@@ -1337,7 +1342,8 @@ exit_local:
             asio::ip::udp::socket socket(io_context);
             socket.open(asio::ip::udp::v4());
 
-#ifdef _WIN32
+/*
+ #ifdef _WIN32
             DWORD timeout = 50; // 10 ms for Windows.
             if (setsockopt(socket.native_handle(), SOL_SOCKET, SO_RCVTIMEO,
                 reinterpret_cast<const char*>(&timeout), sizeof(timeout)) < 0)
@@ -1345,16 +1351,18 @@ exit_local:
                 spdlog::error("Failed to set receive timeout on Windows");
             }
 #else
+            
             struct timeval tv;
-            tv.tv_sec = 0;
+            tv.tv_sec = 1;
             tv.tv_usec = 50000; // 10,000 microseconds = 10 ms.
             if (setsockopt(socket.native_handle(), SOL_SOCKET, SO_RCVTIMEO,
                 &tv, sizeof(tv)) < 0)
             {
                 spdlog::error("Failed to set receive timeout on Linux/macOS");
             }
+  
 #endif
-
+*/
             if (!address.length()) {
                 asio::socket_base::broadcast broadcast_option(true);
                 socket.set_option(broadcast_option);
@@ -1368,6 +1376,12 @@ exit_local:
 
             //auto local_ep = socket.local_endpoint();
             //spdlog::info("Local ephemeral port assigned: {}", local_ep.port());
+
+            // On linux, the asio does not respect the SO_RCVTIMEO option
+            // As a work-around we set the socket to non-blocking mode
+            // and use a sleep to allow the socket to receive the reply.
+            socket.non_blocking(true);
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
             char reply[1152];
             asio::ip::udp::endpoint sender_endpoint;
@@ -1404,6 +1418,19 @@ exit_local:
                 spdlog::error("Reply too short ({} bytes)", reply_length);
             }
         }
+        
+        // catch  asio::error::would_block
+        catch(asio::system_error& e) {
+            // Don't log an error for "receive_from: Resource temporarily unavailable" as this is expected
+            if (e.code() != asio::error::would_block) {
+                spdlog::error("UDP control transfer failed: {}", e.what());
+            }
+            //else {
+            //    spdlog::info("UDP control transfer would block, no response received");
+            //}
+        }
+
+        // catch other exceptions
         catch (std::exception& e) {
             spdlog::error("UDP problem: {}", e.what());
         }
